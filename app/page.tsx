@@ -1,145 +1,346 @@
 'use client';
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import Autocomplete from 'react-google-autocomplete';
 
-// Setup Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Setup Supabase Client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-export default function Home() {
-  const searchParams = useSearchParams();
-  const kodeCard = searchParams.get('kode');
+interface Prediction {
+  place_id: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
+}
 
-  const [isRegistered, setIsRegistered] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [placeId, setPlaceId] = useState('');
-  const [pin, setPin] = useState('');
-  const [targetUrl, setTargetUrl] = useState('');
+export default function ReviewSatsetHome() {
+  const searchParams = useSearchParams();
+  const kode = searchParams.get('kode');
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isRegistered, setIsRegistered] = useState<boolean>(false);
+  const [targetUrl, setTargetUrl] = useState<string>('');
+  const [businessName, setBusinessName] = useState<string>('');
+  const [pin, setPin] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [inputPin, setInputPin] = useState<string>('');
+
+  // Google Places Autocomplete States
+  const [query, setQuery] = useState<string>('');
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string>('');
+  
+  const autocompleteServiceRef = useRef<any>(null);
+  const placesServiceRef = useRef<any>(null);
+  const dummyDivRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    async function checkCard() {
-      if (kodeCard) {
-        // Cek database Supabase
-        const { data, error } = await supabase
-          .from('cards')
-          .select('*')
-          .eq('card_code', kodeCard)
-          .single();
-
-        if (data) {
-          // Kartu sudah terdaftar
-          setIsRegistered(true);
-          // Format link Google Review (membutuhkan Place ID)
-          setTargetUrl(`https://search.google.com/local/writereview?placeid=${data.place_id}`);
-        } else {
-          // Kartu belum terdaftar
-          setIsRegistered(false);
-        }
-      }
+    if (!kode) {
       setLoading(false);
-    }
-    checkCard();
-  }, [kodeCard]);
-
-  // Fungsi saat tombol simpan ditekan (Registrasi)
-  const handleRegister = async () => {
-    if (!placeId || !pin) {
-      alert("Harap isi lokasi dan PIN!");
       return;
     }
-    const { data, error } = await supabase
-      .from('cards')
-      .insert([
-        { card_code: kodeCard, place_id: placeId, pin: pin }
-      ]);
 
-    if (error) {
-      alert("Gagal menyimpan data!");
-      console.log(error);
+    async function checkCard() {
+      try {
+        const { data, error } = await supabase
+          .from('kartu_review')
+          .select('*')
+          .eq('kode', kode)
+          .single();
+
+        if (data && data.google_url) {
+          setIsRegistered(true);
+          setTargetUrl(data.google_url);
+        } else {
+          setIsRegistered(false);
+        }
+      } catch (err) {
+        console.error('Error fetching card:', err);
+        setIsRegistered(false);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    checkCard();
+  }, [kode]);
+
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return;
+
+    if (!(window as any).google || !(window as any).google.maps) {
+      const existingScript = document.getElementById('google-maps-script');
+      if (!existingScript) {
+        const script = document.createElement('script');
+        script.id = 'google-maps-script';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = initAutocompleteServices;
+        document.head.appendChild(script);
+      } else {
+        existingScript.onload = initAutocompleteServices;
+      }
     } else {
-      alert("Berhasil didaftarkan!");
-      window.location.reload(); // Refresh halaman agar masuk ke mode 'Sudah Terdaftar'
+      initAutocompleteServices();
+    }
+
+    function initAutocompleteServices() {
+      if ((window as any).google && (window as any).google.maps && (window as any).google.maps.places) {
+        autocompleteServiceRef.current = new (window as any).google.maps.places.AutocompleteService();
+        if (dummyDivRef.current) {
+          placesServiceRef.current = new (window as any).google.maps.places.PlacesService(dummyDivRef.current);
+        }
+      }
+    }
+  }, []);
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setQuery(val);
+    setSelectedPlaceId('');
+
+    if (!val || val.length < 2 || !autocompleteServiceRef.current) {
+      setPredictions([]);
+      return;
+    }
+
+    autocompleteServiceRef.current.getPlacePredictions(
+      { input: val, types: ['establishment'] },
+      (results: Prediction[], status: string) => {
+        if (status === (window as any).google.maps.places.PlacesServiceStatus.OK && results) {
+          setPredictions(results);
+        } else {
+          setPredictions([]);
+        }
+      }
+    );
+  };
+
+  const handleSelectPlace = (prediction: Prediction) => {
+    setQuery(prediction.description);
+    setBusinessName(prediction.structured_formatting.main_text);
+    setSelectedPlaceId(prediction.place_id);
+    setPredictions([]);
+  };
+
+  const handleRegister = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!selectedPlaceId || !query) {
+      alert('Silakan pilih nama bisnis/toko dari daftar dropdown!');
+      return;
+    }
+    if (!pin || pin.length < 4) {
+      alert('PIN minimal harus diisi 4 karakter angka!');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    if (!placesServiceRef.current && dummyDivRef.current && (window as any).google) {
+      placesServiceRef.current = new (window as any).google.maps.places.PlacesService(dummyDivRef.current);
+    }
+
+    if (!placesServiceRef.current) {
+      alert('Layanan Google Maps belum siap. Coba muat ulang halaman.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    placesServiceRef.current.getDetails(
+      { placeId: selectedPlaceId, fields: ['url', 'name'] },
+      async (place: any, status: string) => {
+        if (status === (window as any).google.maps.places.PlacesServiceStatus.OK && place && place.url) {
+          const googleReviewUrl = `https://search.google.com/local/writereview?placeid=${selectedPlaceId}`;
+
+          const { error } = await supabase
+            .from('kartu_review')
+            .upsert({
+              kode: kode,
+              nama_bisnis: businessName || place.name,
+              google_url: googleReviewUrl,
+              pin: pin
+            }, { onConflict: ['kode'] });
+
+          if (error) {
+            alert('Gagal menyimpan ke database: ' + error.message);
+            setIsSubmitting(false);
+          } else {
+            alert('Berhasil diaktifkan! Halaman akan diarahkan ke Google Review.');
+            window.location.href = googleReviewUrl;
+          }
+        } else {
+          alert('Gagal mengambil data detail Google Maps tempat tersebut.');
+          setIsSubmitting(false);
+        }
+      }
+    );
+  };
+
+  const handleVerifyEditPin = async (e: FormEvent) => {
+    e.preventDefault();
+    const { data } = await supabase
+      .from('kartu_review')
+      .select('pin')
+      .eq('kode', kode)
+      .single();
+
+    if (data && data.pin === inputPin) {
+      setIsEditing(true);
+    } else {
+      alert('PIN salah! Silakan coba lagi.');
     }
   };
 
-  // Tampilan saat loading
-  if (loading) return <div className="p-10 text-center">Memuat data...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-medium">
+        Memeriksa status kartu...
+      </div>
+    );
+  }
 
-  // Jika diakses tanpa ?kode=
-  if (!kodeCard) return <div className="p-10 text-center">Kartu tidak valid. Kode tidak ditemukan.</div>;
+  if (!kode) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-md text-center max-w-sm">
+          <h1 className="text-xl font-bold text-red-600 mb-2">Kartu Tidak Valid</h1>
+          <p className="text-slate-500 text-sm">Parameter kode identitas kartu tidak ditemukan pada URL.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        
-        {isRegistered ? (
-          // === TAMPILAN KARTU SUDAH TERDAFTAR ===
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Mengarahkan ke Google Review...</h1>
-            <p className="mb-6 text-gray-600">Jika tidak otomatis berpindah, klik tombol di bawah.</p>
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 relative">
+      <div ref={dummyDivRef} style={{ display: 'none' }}></div>
+
+      <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md border border-slate-100">
+        {isRegistered && !isEditing ? (
+          <div className="text-center py-4">
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">
+              ✨
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">Mengarahkan...</h1>
+            <p className="text-slate-500 text-sm mb-6">Kamu sedang dibawa langsung ke halaman Google Review.</p>
+            
             <a 
               href={targetUrl}
-              className="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600 inline-block w-full"
+              className="w-full block bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-xl transition duration-200 shadow-sm"
             >
-              Buka Google Review
+              Buka Google Review Sekarang
             </a>
-            
-            {/* Opsi Edit (Untuk nanti) */}
-            <div className="mt-8 pt-4 border-t border-gray-200">
-              <p className="text-sm text-gray-500 mb-2">Pemilik bisnis?</p>
-              <button className="text-blue-500 text-sm hover:underline">Edit Lokasi</button>
+
+            <div className="mt-8 pt-6 border-t border-slate-100">
+              <p className="text-xs text-slate-400 mb-3">Pemilik bisnis ingin mengganti lokasi toko?</p>
+              
+              <form onSubmit={handleVerifyEditPin} className="flex gap-2">
+                <input 
+                  type="password" 
+                  placeholder="Masukkan PIN" 
+                  value={inputPin}
+                  onChange={(e) => setInputPin(e.target.value)}
+                  className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+                  required
+                />
+                <button 
+                  type="submit"
+                  className="bg-slate-800 hover:bg-slate-900 text-white text-sm px-4 py-2 rounded-lg transition"
+                >
+                  Edit
+                </button>
+              </form>
             </div>
-            
-            {/* Auto Redirect Script */}
+
             <script dangerouslySetInnerHTML={{__html: `
               setTimeout(function() {
                 window.location.href = "${targetUrl}";
-              }, 3000);
+              }, 2000);
             `}} />
           </div>
-
         ) : (
-          // === TAMPILAN REGISTRASI (BELUM TERDAFTAR) ===
           <div>
-            <h1 className="text-2xl font-bold mb-6 text-center">Aktivasi Kartu Baru</h1>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2">Cari Nama Bisnis Kamu</label>
-              {/* Dropdown Autocomplete Google Maps */}
-              <Autocomplete
-                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
-                onPlaceSelected={(place) => {
-                  if(place.place_id) setPlaceId(place.place_id);
-                }}
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                placeholder="Ketik nama cafe, toko, dll..."
-              />
+            <div className="text-center mb-6">
+              <span className="bg-blue-50 text-blue-600 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">
+                ID: {kode}
+              </span>
+              <h1 className="text-xl font-bold text-slate-800 mt-2">
+                {isEditing ? 'Ubah Lokasi Bisnis' : 'Aktivasi Kartu Review'}
+              </h1>
+              <p className="text-slate-500 text-sm">Hubungkan kartu NFC/QR ini ke Google Maps toko kamu.</p>
             </div>
 
-            <div className="mb-6">
-              <label className="block text-gray-700 text-sm font-bold mb-2">Buat PIN (Untuk Edit Nanti)</label>
-              <input 
-                type="password" 
-                maxLength="6"
-                placeholder="Contoh: 123456"
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-              />
-            </div>
+            <form onSubmit={handleRegister} className="space-y-4 relative">
+              <div className="relative">
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+                  Nama Bisnis / Toko
+                </label>
+                <input 
+                  type="text"
+                  value={query}
+                  onChange={handleInputChange}
+                  placeholder="Ketik nama cafe atau toko..."
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+                  required
+                />
 
-            <button 
-              onClick={handleRegister}
-              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full"
-            >
-              Simpan & Aktifkan
-            </button>
+                {predictions.length > 0 && (
+                  <ul className="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    {predictions.map((pred) => (
+                      <li
+                        key={pred.place_id}
+                        onClick={() => handleSelectPlace(pred)}
+                        className="px-4 py-2.5 text-sm hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none"
+                      >
+                        <p className="font-medium text-slate-800">{pred.structured_formatting.main_text}</p>
+                        <p className="text-xs text-slate-400 truncate">{pred.structured_formatting.secondary_text}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+                  Buat PIN Keamanan (Min. 4 Angka)
+                </label>
+                <input 
+                  type="password"
+                  maxLength={6}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="Contoh: 1234"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+                  required
+                />
+              </div>
+
+              <button 
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-4 rounded-xl transition duration-200 shadow-sm mt-2 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Menyimpan...' : 'Simpan & Aktifkan'}
+              </button>
+
+              {isEditing && (
+                <button 
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="w-full text-slate-500 text-sm py-2 hover:underline mt-1"
+                >
+                  Batal
+                </button>
+              )}
+            </form>
           </div>
         )}
-
       </div>
     </div>
   );
