@@ -19,17 +19,30 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // --- 2. GANTI DENGAN URL APPS SCRIPT DARI TAHAP 1 ---
-const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbxhnyDenJlPtKrTF9UBDYdyzUkG40bumO7-Sj8bL5aPHa0TrOnYl6U3clzOxA7nnxvNvQ/exec";
+const GOOGLE_SHEETS_URL = "ISI_DENGAN_URL_APPS_SCRIPT_KAMU";
 
 const RimapLogo = () => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="url(#admin-grad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><defs><linearGradient id="admin-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#10b981" /><stop offset="100%" stopColor="#059669" /></linearGradient></defs><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
-    <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Rimap Admin</h1>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="url(#admin-grad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <defs>
+        <linearGradient id="admin-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#10b981" />
+          <stop offset="100%" stopColor="#059669" />
+        </linearGradient>
+      </defs>
+      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
+      <line x1="9" y1="3" x2="9" y2="18"></line>
+      <line x1="15" y1="6" x2="15" y2="21"></line>
+    </svg>
+    <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+      Rimap Admin
+    </h1>
   </div>
 );
 
 export default function AdminRahasia() {
   const [jumlah, setJumlah] = useState(50);
+  const [hasil, setHasil] = useState("");
   const [loading, setLoading] = useState(false);
 
   const generateKode = async () => {
@@ -38,6 +51,7 @@ export default function AdminRahasia() {
     try {
       const batch = writeBatch(db);
       const newRowsForSheets = [];
+      let teksHasil = "Kode Unik\tLink Lengkap\n";
 
       for (let i = 0; i < jumlah; i++) {
         const karakter = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
@@ -54,11 +68,12 @@ export default function AdminRahasia() {
           link: `https://review-satset.vercel.app/?kode=${randomCode}`,
           status: "Baru Dicetak"
         });
+
+        teksHasil += `${randomCode}\thttps://review-satset.vercel.app/?kode=${randomCode}\n`;
       }
 
       await batch.commit(); // Eksekusi ke Firebase
 
-      // --- KODE NO-CORS DITARUH DI SINI ---
       // Tembak data ke Google Sheets dengan metode no-cors
       fetch(GOOGLE_SHEETS_URL, {
         method: 'POST',
@@ -66,40 +81,49 @@ export default function AdminRahasia() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'appendBatch', rows: newRowsForSheets })
       }).catch(err => console.error("Sheets error:", err));
-      // ------------------------------------
 
+      setHasil(teksHasil);
       alert(`Berhasil membuat ${jumlah} kode dan sinkronisasi ke Sheets!`);
-    } catch (error) { alert("Gagal: " + error.message); }
-    setLoading(false);
-  };
-      await batch.commit(); // Eksekusi ke Firebase
-
-      // Tembak data ke Google Sheets
-      await fetch(GOOGLE_SHEETS_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'appendBatch', rows: newRowsForSheets })
-      });
-
-      alert(`Berhasil membuat ${jumlah} kode dan sinkronisasi ke Sheets!`);
-    } catch (error) { alert("Gagal: " + error.message); }
+    } catch (error) { 
+      alert("Gagal: " + error.message); 
+    }
     setLoading(false);
   };
 
   return (
     <>
-      <style>{`.white-futuristic-bg { background-color: #f8fafc; font-family: 'Inter', system-ui, sans-serif; } .glass-card { background: #ffffff; border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 20px; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.08); } .btn-gradient-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; }`}</style>
+      <style>{`
+        .white-futuristic-bg { background-color: #f8fafc; font-family: 'Inter', system-ui, sans-serif; }
+        .glass-card { background: #ffffff; border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 20px; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.08); }
+        .cyber-input-light { background: #f1f5f9; border: 1px solid #e2e8f0; color: #1e293b; transition: all 0.3s ease; }
+        .cyber-input-light:focus { border-color: #10b981; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15); outline: none; }
+        .btn-gradient-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; transition: all 0.3s; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); border: none; }
+        .btn-gradient-green:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); }
+      `}</style>
       <div className="white-futuristic-bg" style={{ minHeight: '100vh', padding: '40px 20px' }}>
-        <div className="glass-card" style={{ maxWidth: '500px', margin: '0 auto', padding: '32px' }}>
+        <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto', padding: '32px' }}>
           <RimapLogo />
-          <h2 style={{ color: '#0f172a', fontSize: '20px' }}>Pusat Produksi Terpusat</h2>
-          <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>Data akan otomatis masuk ke Firebase dan Google Sheets tanpa copy-paste.</p>
+          <h2 style={{ margin: '0 0 8px 0', color: '#0f172a', fontSize: '20px' }}>Pusat Produksi Terpusat</h2>
+          <p style={{ margin: '0 0 24px 0', color: '#64748b', fontSize: '14px', lineHeight: '1.5' }}>
+            Data akan otomatis masuk ke Firebase dan Google Sheets tanpa copy-paste.
+          </p>
           
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Jumlah Kartu</label>
-          <input type="number" value={jumlah} onChange={(e) => setJumlah(e.target.value)} max="500" style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', marginBottom: '16px', border: '1px solid #e2e8f0' }} />
-          
-          <button onClick={generateKode} disabled={loading} className="btn-gradient-green" style={{ width: '100%', padding: '14px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' }}>
-            {loading ? 'Menyinkronkan Database...' : 'Produksi & Sinkronisasi'}
-          </button>
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Jumlah Kartu</label>
+              <input type="number" value={jumlah} onChange={(e) => setJumlah(Number(e.target.value))} max="500" className="cyber-input-light" style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', fontSize: '15px', boxSizing: 'border-box' }} />
+            </div>
+            <button onClick={generateKode} disabled={loading} className="btn-gradient-green" style={{ padding: '12px 24px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' }}>
+              {loading ? 'Menyinkronkan...' : 'Produksi & Sinkronisasi'}
+            </button>
+          </div>
+
+          <textarea 
+            value={hasil} readOnly rows={12} 
+            className="cyber-input-light"
+            style={{ width: '100%', padding: '16px', borderRadius: '10px', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '13px', whiteSpace: 'pre' }} 
+            placeholder="Hasil kode akan muncul di sini sebagai cadangan. Data sudah otomatis terkirim ke Sheets."
+          ></textarea>
         </div>
       </div>
     </>
