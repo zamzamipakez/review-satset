@@ -9,12 +9,13 @@ import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
 // --- GANTI BAGIAN INI DENGAN KODE DARI FIREBASE LO ---
 const firebaseConfig = {
-  apiKey: "ISI_DENGAN_API_KEY_FIREBASE",
-  authDomain: "ISI_DENGAN_AUTH_DOMAIN",
-  projectId: "ISI_DENGAN_PROJECT_ID",
-  storageBucket: "ISI_DENGAN_STORAGE_BUCKET",
-  messagingSenderId: "ISI_DENGAN_SENDER_ID",
-  appId: "ISI_DENGAN_APP_ID"
+  apiKey: "AIzaSyCO4FA-hC18iM6sKuIONIq0H3ryW8Cjk-k",
+  authDomain: "review-satset.firebaseapp.com",
+  projectId: "review-satset",
+  storageBucket: "review-satset.firebasestorage.app",
+  messagingSenderId: "1057136032394",
+  appId: "1:1057136032394:web:5a35de9c6bdefcd6cc0b73",
+  measurementId: "G-V3G3L35QE9"
 };
 // -----------------------------------------------------
 
