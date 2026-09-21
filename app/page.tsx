@@ -7,7 +7,7 @@ import Script from 'next/script';
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, updateDoc } from "firebase/firestore";
 
-// --- GANTI BAGIAN INI DENGAN KODE FIREBASE MILIKMU ---
+// --- 1. GANTI FIREBASE CONFIG ---
 const firebaseConfig = {
   apiKey: "AIzaSyCO4FA-hC18iM6sKuIONIq0H3ryW8Cjk-k",
   authDomain: "review-satset.firebaseapp.com",
@@ -17,28 +17,16 @@ const firebaseConfig = {
   appId: "1:1057136032394:web:5a35de9c6bdefcd6cc0b73",
   measurementId: "G-V3G3L35QE9"
 };
-// -----------------------------------------------------
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Komponen Ikon & Logo Rimap
+// --- 2. GANTI DENGAN URL APPS SCRIPT DARI TAHAP 1 ---
+const GOOGLE_SHEETS_URL = "ISI_DENGAN_URL_APPS_SCRIPT_KAMU";
+
 const RimapLogo = () => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#blue-grad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <defs>
-        <linearGradient id="blue-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0070f3" />
-          <stop offset="100%" stopColor="#00c6ff" />
-        </linearGradient>
-      </defs>
-      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
-      <line x1="9" y1="3" x2="9" y2="18"></line>
-      <line x1="15" y1="6" x2="15" y2="21"></line>
-    </svg>
-    <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '800', letterSpacing: '-0.5px', background: 'linear-gradient(135deg, #0070f3 0%, #00c6ff 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-      Rimap
-    </h1>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#blue-grad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><defs><linearGradient id="blue-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#0070f3" /><stop offset="100%" stopColor="#00c6ff" /></linearGradient></defs><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
+    <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '800', background: 'linear-gradient(135deg, #0070f3 0%, #00c6ff 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Rimap</h1>
   </div>
 );
 
@@ -49,25 +37,31 @@ function KartuReviewApp() {
   const searchParams = useSearchParams();
   const kode = searchParams.get('kode');
 
-  const [loading, setLoading] = useState(true);
-  const [isValidCode, setIsValidCode] = useState(false);
+  const [uiState, setUiState] = useState('loading');
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (!kode) { setLoading(false); return; }
+    if (!kode) { setUiState('invalid'); return; }
     async function cekKartu() {
       try {
         const docRef = doc(db, "kartu_review", kode);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          if (docSnap.data().google_url) window.location.href = docSnap.data().google_url;
-          else { setIsValidCode(true); setLoading(false); }
-        } else { setIsValidCode(false); setLoading(false); }
-      } catch (error) { setLoading(false); }
+          const data = docSnap.data();
+          if (data.google_url) {
+            window.location.href = data.google_url; // Sudah terdaftar
+          } else if (data.status === "lolos_qc") {
+            setUiState('register'); // Lolos QC, siap diisi
+          } else {
+            setUiState('qc'); // Paksa masuk QC jika status belum lolos_qc
+          }
+        } else { setUiState('invalid'); }
+      } catch (error) { setUiState('invalid'); }
     }
     cekKartu();
   }, [kode]);
@@ -87,24 +81,51 @@ function KartuReviewApp() {
     });
   };
 
+  const handleQCReady = async () => {
+    setIsProcessing(true);
+    try {
+      await updateDoc(doc(db, "kartu_review", kode), { status: "lolos_qc" });
+      
+      // Update Sheets (Gunakan no-cors agar tidak diblokir browser)
+      fetch(GOOGLE_SHEETS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateStatus', kode: kode, status: 'Lolos QC' })
+      }).catch(err => console.log("Background sync error:", err));
+
+      setUiState('register');
+    } catch (error) { alert('Gagal memverifikasi QC: ' + error.message); }
+    setIsProcessing(false);
+  };
+
   const handleSimpan = async (e) => {
     e.preventDefault();
-    if (!selectedPlace || !pin || pin.length !== 4) {
-      alert('Pilih nama bisnis dari dropdown dan pastikan PIN 4 digit angka!');
-      return;
-    }
+    if (!selectedPlace || !pin || pin.length !== 4) { alert('Pilih bisnis dan isi PIN 4 digit!'); return; }
+    setIsProcessing(true);
     try {
       await updateDoc(doc(db, "kartu_review", kode), {
         nama_bisnis: selectedPlace.name,
         google_url: selectedPlace.url,
-        pin: pin
+        pin: pin,
+        status: "terpakai"
       });
-      alert('Kartu Rimap Anda berhasil diaktifkan!');
+      
+      // Update Sheets
+      fetch(GOOGLE_SHEETS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateStatus', kode: kode, status: 'Terpakai (Fill Hijau)' })
+      }).catch(err => console.log("Background sync error:", err));
+      
+      alert('Kartu Rimap berhasil diaktifkan!');
       window.location.href = selectedPlace.url;
     } catch (error) { alert('Gagal menyimpan: ' + error.message); }
+    setIsProcessing(false);
   };
 
-  if (loading) return <div className="white-futuristic-bg min-h-screen flex items-center justify-center text-gray-500">Memeriksa status kartu...</div>;
+  if (uiState === 'loading') return <div className="white-futuristic-bg min-h-screen flex items-center justify-center text-gray-500">Memeriksa status kartu...</div>;
   
   return (
     <>
@@ -113,34 +134,43 @@ function KartuReviewApp() {
         .glass-card { background: #ffffff; border: 1px solid rgba(0, 112, 243, 0.1); border-radius: 24px; box-shadow: 0 20px 40px rgba(0, 112, 243, 0.08), 0 1px 3px rgba(0,0,0,0.05); }
         .cyber-input-light { background: #f1f5f9; border: 1px solid #e2e8f0; color: #1e293b; transition: all 0.3s ease; }
         .cyber-input-light:focus { border-color: #0070f3; box-shadow: 0 0 0 4px rgba(0, 112, 243, 0.15); outline: none; background: #ffffff; }
-        .btn-gradient { background: linear-gradient(135deg, #0070f3 0%, #00c6ff 100%); color: white; transition: all 0.3s; box-shadow: 0 4px 14px rgba(0, 112, 243, 0.3); }
+        .btn-gradient { background: linear-gradient(135deg, #0070f3 0%, #00c6ff 100%); color: white; transition: all 0.3s; box-shadow: 0 4px 14px rgba(0, 112, 243, 0.3); border:none; }
         .btn-gradient:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 112, 243, 0.4); }
+        .btn-qc { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; transition: all 0.3s; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3); border:none; font-size: 22px; padding: 20px; }
+        .btn-qc:hover { transform: scale(1.05); box-shadow: 0 6px 25px rgba(245, 158, 11, 0.5); }
         .pac-container { border-radius: 12px !important; box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important; border: 1px solid #e2e8f0 !important; font-family: 'Inter', sans-serif !important; }
         .pac-item { padding: 12px !important; cursor: pointer !important; font-size: 14px !important; border-top: 1px solid #f1f5f9 !important; }
-        .pac-item:hover { background-color: #f8fafc !important; }
       `}</style>
 
       <div className="white-futuristic-bg" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
         <Script src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`} onReady={initAutocomplete} />
         
-        {(!kode || !isValidCode) ? (
+        {uiState === 'invalid' && (
           <div className="glass-card" style={{ padding: '40px', textAlign: 'center', maxWidth: '400px', width: '100%' }}>
             <RimapLogo />
             <div style={{ color: '#ef4444', fontSize: '50px', marginBottom: '15px' }}>✖</div>
             <h2 style={{ margin: '0 0 10px 0', color: '#0f172a', fontSize: '24px', fontWeight: '700' }}>Akses Ditolak</h2>
-            <p style={{ margin: '0', color: '#64748b', fontSize: '15px', lineHeight: '1.6' }}>Kode <b>{kode || 'Kosong'}</b> tidak terdaftar di sistem. Gunakan kartu fisik Rimap yang resmi.</p>
+            <p style={{ margin: '0', color: '#64748b', fontSize: '15px' }}>Kode tidak valid. Gunakan kartu fisik Rimap resmi.</p>
           </div>
-        ) : (
+        )}
+
+        {uiState === 'qc' && (
+          <div className="glass-card" style={{ padding: '40px', textAlign: 'center', maxWidth: '400px', width: '100%' }}>
+            <RimapLogo />
+            <h2 style={{ color: '#0f172a', fontSize: '22px', fontWeight: '700', marginBottom: '10px' }}>Quality Control (QC)</h2>
+            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '30px' }}>Sistem mendeteksi pemindaian pertama. Tekan tombol di bawah untuk mengonfirmasi fungsi NFC dan QR.</p>
+            <button onClick={handleQCReady} disabled={isProcessing} className="btn-qc" style={{ width: '100%', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', letterSpacing: '2px' }}>
+              {isProcessing ? 'MEMPROSES...' : 'READY!'}
+            </button>
+          </div>
+        )}
+
+        {uiState === 'register' && (
           <div className="glass-card" style={{ padding: '40px', maxWidth: '420px', width: '100%' }}>
             <RimapLogo />
             <div style={{ textAlign: 'center', marginBottom: '28px' }}>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '22px', fontWeight: '700', color: '#0f172a' }}>Aktivasi Kartu Baru</h2>
-              <p style={{ margin: '0 0 16px 0', color: '#64748b', fontSize: '14px', lineHeight: '1.5' }}>
-                Selamat datang! Silakan lengkapi data di bawah ini untuk menghubungkan kartu ini dengan halaman ulasan Google bisnis Anda.
-              </p>
-              <div style={{ display: 'inline-block', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '6px 16px', borderRadius: '20px', color: '#0070f3', fontSize: '13px', fontWeight: '600', letterSpacing: '1px' }}>
-                ID: {kode}
-              </div>
+              <div style={{ display: 'inline-block', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '6px 16px', borderRadius: '20px', color: '#0070f3', fontSize: '13px', fontWeight: '600' }}>ID: {kode}</div>
             </div>
 
             <form onSubmit={handleSimpan}>
@@ -151,17 +181,16 @@ function KartuReviewApp() {
 
               <div style={{ marginBottom: '32px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>2. Buat PIN Keamanan (4 Digit)</label>
-                <p style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#94a3b8' }}>Ingat PIN ini untuk mengubah pengaturan kartu di masa depan.</p>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <input type={showPin ? "text" : "password"} value={pin} onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="••••" required className="cyber-input-light" style={{ width: '100%', padding: '14px 50px 14px 16px', borderRadius: '12px', fontSize: '18px', boxSizing: 'border-box', letterSpacing: showPin ? 'normal' : '4px' }} />
-                  <button type="button" onClick={() => setShowPin(!showPin)} style={{ position: 'absolute', right: '16px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <button type="button" onClick={() => setShowPin(!showPin)} style={{ position: 'absolute', right: '16px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
                     {showPin ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
                 </div>
               </div>
 
-              <button type="submit" className="btn-gradient" style={{ width: '100%', padding: '16px', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '16px', letterSpacing: '0.5px' }}>
-                Aktifkan Kartu Rimap
+              <button type="submit" disabled={isProcessing} className="btn-gradient" style={{ width: '100%', padding: '16px', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '16px' }}>
+                {isProcessing ? 'MENYIMPAN...' : 'Aktifkan Kartu Rimap'}
               </button>
             </form>
           </div>
