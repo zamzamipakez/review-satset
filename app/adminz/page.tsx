@@ -58,6 +58,22 @@ export default function AdminRahasia() {
 
       await batch.commit(); // Eksekusi ke Firebase
 
+      // --- KODE NO-CORS DITARUH DI SINI ---
+      // Tembak data ke Google Sheets dengan metode no-cors
+      fetch(GOOGLE_SHEETS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'appendBatch', rows: newRowsForSheets })
+      }).catch(err => console.error("Sheets error:", err));
+      // ------------------------------------
+
+      alert(`Berhasil membuat ${jumlah} kode dan sinkronisasi ke Sheets!`);
+    } catch (error) { alert("Gagal: " + error.message); }
+    setLoading(false);
+  };
+      await batch.commit(); // Eksekusi ke Firebase
+
       // Tembak data ke Google Sheets
       await fetch(GOOGLE_SHEETS_URL, {
         method: 'POST',
