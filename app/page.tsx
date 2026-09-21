@@ -62,15 +62,18 @@ function KartuReviewApp() {
   const initAutocomplete = () => {
     if (!window.google || !inputRef.current) return;
     
+    // Mengambil place_id sebagai ganti url biasa
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      fields: ['name', 'url'],
+      fields: ['name', 'place_id'],
       types: ['establishment'],
     });
 
     autocomplete.addListener('place_changed', () => {
       const place = autocomplete.getPlace();
-      if (place.name && place.url) {
-        setSelectedPlace({ name: place.name, url: place.url });
+      if (place.name && place.place_id) {
+        // Merakit URL direct review sesuai format generator profesional
+        const directReviewUrl = `https://search.google.com/local/writereview?placeid=${place.place_id}`;
+        setSelectedPlace({ name: place.name, url: directReviewUrl });
       } else {
         alert('Pilih nama bisnis dari daftar otomatis yang muncul.');
       }
