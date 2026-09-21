@@ -19,7 +19,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // --- 2. GANTI DENGAN URL APPS SCRIPT DARI TAHAP 1 ---
-const GOOGLE_SHEETS_URL = "ISI_DENGAN_URL_APPS_SCRIPT_KAMU";
+const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwwigu7v6Y-WQ3xhhQNtZLfYod4HcYozMpOrTn6wxsqlwcr5Qdu54MTwECz-90vz09g-w/exec";
 
 const RimapLogo = () => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
