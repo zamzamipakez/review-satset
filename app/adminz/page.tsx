@@ -1,9 +1,11 @@
 // @ts-nocheck
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Script from 'next/script';
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, writeBatch } from "firebase/firestore";
+import { getFirestore, doc, getDoc, updateDoc } from "firebase/firestore";
 
 // --- 1. GANTI FIREBASE CONFIG ---
 const firebaseConfig = {
@@ -18,114 +20,190 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- 2. GANTI DENGAN URL APPS SCRIPT DARI TAHAP 1 ---
+// --- 2. GANTI DENGAN URL APPS SCRIPT ---
 const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwwigu7v6Y-WQ3xhhQNtZLfYod4HcYozMpOrTn6wxsqlwcr5Qdu54MTwECz-90vz09g-w/exec";
 
 const RimapLogo = () => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="url(#admin-grad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <defs>
-        <linearGradient id="admin-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#10b981" />
-          <stop offset="100%" stopColor="#059669" />
-        </linearGradient>
-      </defs>
-      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
-      <line x1="9" y1="3" x2="9" y2="18"></line>
-      <line x1="15" y1="6" x2="15" y2="21"></line>
-    </svg>
-    <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-      Rimap Admin
-    </h1>
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#blue-grad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><defs><linearGradient id="blue-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#0070f3" /><stop offset="100%" stopColor="#00c6ff" /></linearGradient></defs><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
+    <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '800', background: 'linear-gradient(135deg, #0070f3 0%, #00c6ff 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Rimap</h1>
   </div>
 );
 
-export default function AdminRahasia() {
-  const [jumlah, setJumlah] = useState(50);
-  const [hasil, setHasil] = useState("");
-  const [loading, setLoading] = useState(false);
+const EyeIcon = () => ( <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg> );
+const EyeOffIcon = () => ( <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg> );
 
-  const generateKode = async () => {
-    if (jumlah > 500) { alert("Maksimal 500 kode!"); return; }
-    setLoading(true);
+function KartuReviewApp() {
+  const searchParams = useSearchParams();
+  const kode = searchParams.get('kode');
+
+  const [uiState, setUiState] = useState('loading');
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!kode) { setUiState('invalid'); return; }
+    async function cekKartu() {
+      try {
+        const docRef = doc(db, "kartu_review", kode);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.google_url) {
+            window.location.href = data.google_url; 
+          } else if (data.status === "lolos_qc") {
+            setUiState('register'); 
+          } else {
+            setUiState('qc'); 
+          }
+        } else { setUiState('invalid'); }
+      } catch (error) { setUiState('invalid'); }
+    }
+    cekKartu();
+  }, [kode]);
+
+  const initAutocomplete = () => {
+    if (!window.google || !inputRef.current) return;
+    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+      fields: ['name', 'place_id'],
+      types: ['establishment'],
+    });
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace();
+      if (place.name && place.place_id) {
+        const directReviewUrl = `https://search.google.com/local/writereview?placeid=${place.place_id}`;
+        setSelectedPlace({ name: place.name, url: directReviewUrl });
+      } else { alert('Pilih nama bisnis dari daftar otomatis yang muncul.'); }
+    });
+  };
+
+  const handleQCReady = async () => {
+    setIsProcessing(true);
     try {
-      const batch = writeBatch(db);
-      const newRowsForSheets = [];
-      let teksHasil = "Kode Unik\tLink Lengkap\n";
-
-      for (let i = 0; i < jumlah; i++) {
-        const karakter = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
-        let randomCode = 'RVW-';
-        for (let j = 0; j < 6; j++) { randomCode += karakter.charAt(Math.floor(Math.random() * karakter.length)); }
-        
-        // Simpan ke Firebase dengan status "baru_cetak" untuk memicu halaman QC
-        const docRef = doc(db, "kartu_review", randomCode);
-        batch.set(docRef, { status: "baru_cetak" });
-
-        // Siapkan data untuk Google Sheets
-        newRowsForSheets.push({
-          kode: randomCode,
-          link: `https://review-satset.vercel.app/?kode=${randomCode}`,
-          status: "Baru Dicetak"
-        });
-
-        teksHasil += `${randomCode}\thttps://review-satset.vercel.app/?kode=${randomCode}\n`;
-      }
-
-      await batch.commit(); // Eksekusi ke Firebase
-
-      // Tembak data ke Google Sheets dengan metode no-cors
+      await updateDoc(doc(db, "kartu_review", kode), { status: "lolos_qc" });
+      
+      // Update Sheets dengan text/plain agar lolos sensor CORS
       fetch(GOOGLE_SHEETS_URL, {
         method: 'POST',
         mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'appendBatch', rows: newRowsForSheets })
-      }).catch(err => console.error("Sheets error:", err));
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'updateStatus', kode: kode, status: 'Lolos QC' })
+      }).catch(err => console.log("Background sync error:", err));
 
-      setHasil(teksHasil);
-      alert(`Berhasil membuat ${jumlah} kode dan sinkronisasi ke Sheets!`);
-    } catch (error) { 
-      alert("Gagal: " + error.message); 
-    }
-    setLoading(false);
+      setUiState('register');
+    } catch (error) { alert('Gagal memverifikasi QC: ' + error.message); }
+    setIsProcessing(false);
   };
 
+  const handleSimpan = async (e) => {
+    e.preventDefault();
+    if (!selectedPlace || !pin || pin.length !== 4) { alert('Pilih bisnis dan isi PIN 4 digit!'); return; }
+    setIsProcessing(true);
+    try {
+      await updateDoc(doc(db, "kartu_review", kode), {
+        nama_bisnis: selectedPlace.name,
+        google_url: selectedPlace.url,
+        pin: pin,
+        status: "terpakai"
+      });
+      
+      // Update Sheets dengan text/plain
+      fetch(GOOGLE_SHEETS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'updateStatus', kode: kode, status: 'Terpakai (Fill Hijau)' })
+      }).catch(err => console.log("Background sync error:", err));
+      
+      alert('Kartu Rimap berhasil diaktifkan!');
+      window.location.href = selectedPlace.url;
+    } catch (error) { alert('Gagal menyimpan: ' + error.message); }
+    setIsProcessing(false);
+  };
+
+  if (uiState === 'loading') return <div className="white-futuristic-bg min-h-screen flex items-center justify-center text-gray-500">Memeriksa status kartu...</div>;
+  
   return (
     <>
       <style>{`
         .white-futuristic-bg { background-color: #f8fafc; font-family: 'Inter', system-ui, sans-serif; }
-        .glass-card { background: #ffffff; border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 20px; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.08); }
+        .glass-card { background: #ffffff; border: 1px solid rgba(0, 112, 243, 0.1); border-radius: 24px; box-shadow: 0 20px 40px rgba(0, 112, 243, 0.08), 0 1px 3px rgba(0,0,0,0.05); }
         .cyber-input-light { background: #f1f5f9; border: 1px solid #e2e8f0; color: #1e293b; transition: all 0.3s ease; }
-        .cyber-input-light:focus { border-color: #10b981; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15); outline: none; }
-        .btn-gradient-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; transition: all 0.3s; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); border: none; }
-        .btn-gradient-green:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); }
+        .cyber-input-light:focus { border-color: #0070f3; box-shadow: 0 0 0 4px rgba(0, 112, 243, 0.15); outline: none; background: #ffffff; }
+        .btn-gradient { background: linear-gradient(135deg, #0070f3 0%, #00c6ff 100%); color: white; transition: all 0.3s; box-shadow: 0 4px 14px rgba(0, 112, 243, 0.3); border:none; }
+        .btn-gradient:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 112, 243, 0.4); }
+        .btn-qc { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; transition: all 0.3s; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3); border:none; font-size: 22px; padding: 20px; }
+        .btn-qc:hover { transform: scale(1.05); box-shadow: 0 6px 25px rgba(245, 158, 11, 0.5); }
+        .pac-container { border-radius: 12px !important; box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important; border: 1px solid #e2e8f0 !important; font-family: 'Inter', sans-serif !important; }
+        .pac-item { padding: 12px !important; cursor: pointer !important; font-size: 14px !important; border-top: 1px solid #f1f5f9 !important; }
       `}</style>
-      <div className="white-futuristic-bg" style={{ minHeight: '100vh', padding: '40px 20px' }}>
-        <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto', padding: '32px' }}>
-          <RimapLogo />
-          <h2 style={{ margin: '0 0 8px 0', color: '#0f172a', fontSize: '20px' }}>Pusat Produksi Terpusat</h2>
-          <p style={{ margin: '0 0 24px 0', color: '#64748b', fontSize: '14px', lineHeight: '1.5' }}>
-            Data akan otomatis masuk ke Firebase dan Google Sheets tanpa copy-paste.
-          </p>
-          
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Jumlah Kartu</label>
-              <input type="number" value={jumlah} onChange={(e) => setJumlah(Number(e.target.value))} max="500" className="cyber-input-light" style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', fontSize: '15px', boxSizing: 'border-box' }} />
-            </div>
-            <button onClick={generateKode} disabled={loading} className="btn-gradient-green" style={{ padding: '12px 24px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' }}>
-              {loading ? 'Menyinkronkan...' : 'Produksi & Sinkronisasi'}
+
+      <div className="white-futuristic-bg" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+        <Script src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`} onReady={initAutocomplete} />
+        
+        {uiState === 'invalid' && (
+          <div className="glass-card" style={{ padding: '40px', textAlign: 'center', maxWidth: '400px', width: '100%' }}>
+            <RimapLogo />
+            <div style={{ color: '#ef4444', fontSize: '50px', marginBottom: '15px' }}>✖</div>
+            <h2 style={{ margin: '0 0 10px 0', color: '#0f172a', fontSize: '24px', fontWeight: '700' }}>Akses Ditolak</h2>
+            <p style={{ margin: '0', color: '#64748b', fontSize: '15px' }}>Kode tidak valid. Gunakan kartu fisik Rimap resmi.</p>
+          </div>
+        )}
+
+        {uiState === 'qc' && (
+          <div className="glass-card" style={{ padding: '40px', textAlign: 'center', maxWidth: '400px', width: '100%' }}>
+            <RimapLogo />
+            <h2 style={{ color: '#0f172a', fontSize: '22px', fontWeight: '700', marginBottom: '10px' }}>Quality Control (QC)</h2>
+            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '30px' }}>Sistem mendeteksi pemindaian pertama. Tekan tombol di bawah untuk mengonfirmasi fungsi NFC dan QR.</p>
+            <button onClick={handleQCReady} disabled={isProcessing} className="btn-qc" style={{ width: '100%', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', letterSpacing: '2px' }}>
+              {isProcessing ? 'MEMPROSES...' : 'READY!'}
             </button>
           </div>
+        )}
 
-          <textarea 
-            value={hasil} readOnly rows={12} 
-            className="cyber-input-light"
-            style={{ width: '100%', padding: '16px', borderRadius: '10px', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '13px', whiteSpace: 'pre' }} 
-            placeholder="Hasil kode akan muncul di sini sebagai cadangan. Data sudah otomatis terkirim ke Sheets."
-          ></textarea>
-        </div>
+        {uiState === 'register' && (
+          <div className="glass-card" style={{ padding: '40px', maxWidth: '420px', width: '100%' }}>
+            <RimapLogo />
+            <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+              <h2 style={{ margin: '0 0 8px 0', fontSize: '22px', fontWeight: '700', color: '#0f172a' }}>Aktivasi Kartu Baru</h2>
+              <div style={{ display: 'inline-block', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '6px 16px', borderRadius: '20px', color: '#0070f3', fontSize: '13px', fontWeight: '600' }}>ID: {kode}</div>
+            </div>
+
+            <form onSubmit={handleSimpan}>
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>1. Cari Nama Bisnis Anda</label>
+                <input ref={inputRef} type="text" placeholder="Ketik lalu pilih dari daftar..." className="cyber-input-light" style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', fontSize: '15px', boxSizing: 'border-box' }} />
+              </div>
+
+              <div style={{ marginBottom: '32px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>2. Buat PIN Keamanan (4 Digit)</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input type={showPin ? "text" : "password"} value={pin} onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="••••" required className="cyber-input-light" style={{ width: '100%', padding: '14px 50px 14px 16px', borderRadius: '12px', fontSize: '18px', boxSizing: 'border-box', letterSpacing: showPin ? 'normal' : '4px' }} />
+                  <button type="button" onClick={() => setShowPin(!showPin)} style={{ position: 'absolute', right: '16px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+                    {showPin ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" disabled={isProcessing} className="btn-gradient" style={{ width: '100%', padding: '16px', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '16px' }}>
+                {isProcessing ? 'MENYIMPAN...' : 'Aktifkan Kartu Rimap'}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div style={{ backgroundColor: '#f8fafc', minHeight: '100vh' }}></div>}>
+      <KartuReviewApp />
+    </Suspense>
   );
 }
