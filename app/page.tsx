@@ -116,7 +116,7 @@ function KartuReviewApp() {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'updateStatus', kode: kode, status: 'Terpakai (Fill Hijau)' })
+        body: JSON.stringify({ action: 'updateStatus', kode: kode, status: 'Terjual!' })
       }).catch(err => console.log("Background sync error:", err));
       
       alert('Kartu Rimap berhasil diaktifkan!');
