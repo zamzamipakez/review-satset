@@ -22,6 +22,26 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// Komponen Ikon & Logo Rimap
+const RimapLogo = () => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#blue-grad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <defs>
+        <linearGradient id="blue-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#0070f3" />
+          <stop offset="100%" stopColor="#00c6ff" />
+        </linearGradient>
+      </defs>
+      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
+      <line x1="9" y1="3" x2="9" y2="18"></line>
+      <line x1="15" y1="6" x2="15" y2="21"></line>
+    </svg>
+    <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '800', letterSpacing: '-0.5px', background: 'linear-gradient(135deg, #0070f3 0%, #00c6ff 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+      Rimap
+    </h1>
+  </div>
+);
+
 const EyeIcon = () => ( <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg> );
 const EyeOffIcon = () => ( <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg> );
 
@@ -38,28 +58,16 @@ function KartuReviewApp() {
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (!kode) {
-      setLoading(false);
-      return;
-    }
+    if (!kode) { setLoading(false); return; }
     async function cekKartu() {
       try {
         const docRef = doc(db, "kartu_review", kode);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          if (docSnap.data().google_url) {
-            window.location.href = docSnap.data().google_url;
-          } else {
-            setIsValidCode(true);
-            setLoading(false);
-          }
-        } else {
-          setIsValidCode(false);
-          setLoading(false);
-        }
-      } catch (error) {
-        setLoading(false);
-      }
+          if (docSnap.data().google_url) window.location.href = docSnap.data().google_url;
+          else { setIsValidCode(true); setLoading(false); }
+        } else { setIsValidCode(false); setLoading(false); }
+      } catch (error) { setLoading(false); }
     }
     cekKartu();
   }, [kode]);
@@ -75,9 +83,7 @@ function KartuReviewApp() {
       if (place.name && place.place_id) {
         const directReviewUrl = `https://search.google.com/local/writereview?placeid=${place.place_id}`;
         setSelectedPlace({ name: place.name, url: directReviewUrl });
-      } else {
-        alert('Pilih nama bisnis dari daftar otomatis yang muncul.');
-      }
+      } else { alert('Pilih nama bisnis dari daftar otomatis yang muncul.'); }
     });
   };
 
@@ -93,105 +99,69 @@ function KartuReviewApp() {
         google_url: selectedPlace.url,
         pin: pin
       });
-      alert('Kartu berhasil diaktifkan!');
+      alert('Kartu Rimap Anda berhasil diaktifkan!');
       window.location.href = selectedPlace.url;
-    } catch (error) {
-      alert('Gagal menyimpan: ' + error.message);
-    }
+    } catch (error) { alert('Gagal menyimpan: ' + error.message); }
   };
 
-  if (loading) return <div className="futuristic-bg text-white min-h-screen flex items-center justify-center">Memeriksa jaringan...</div>;
+  if (loading) return <div className="white-futuristic-bg min-h-screen flex items-center justify-center text-gray-500">Memeriksa status kartu...</div>;
   
   return (
     <>
       <style>{`
-        .futuristic-bg {
-          background-color: #050505;
-          background-image: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #050505 70%);
-          font-family: 'Inter', system-ui, sans-serif;
-        }
-        .glass-panel {
-          background: rgba(20, 20, 30, 0.6);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: 0 10px 40px rgba(0, 212, 255, 0.1);
-        }
-        .neon-text {
-          background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-        .cyber-input {
-          background: rgba(0, 0, 0, 0.4) !important;
-          border: 1px solid rgba(255, 255, 255, 0.12) !important;
-          color: #fff !important;
-          transition: all 0.3s ease !important;
-        }
-        .cyber-input:focus {
-          border-color: #00f2fe !important;
-          box-shadow: 0 0 15px rgba(0, 242, 254, 0.2) !important;
-          outline: none !important;
-        }
-        .btn-neon {
-          background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
-          color: #000;
-          transition: all 0.4s ease;
-          background-size: 200% auto;
-        }
-        .btn-neon:hover {
-          background-position: right center;
-          box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
-          transform: translateY(-2px);
-        }
-        /* Custom Google Maps Dropdown Styling */
-        .pac-container {
-          background-color: #1a1a2e !important;
-          border: 1px solid rgba(255,255,255,0.1) !important;
-          border-radius: 8px !important;
-          box-shadow: 0 5px 20px rgba(0,0,0,0.5) !important;
-        }
-        .pac-item { color: #a1a1aa !important; border-top: 1px solid rgba(255,255,255,0.05) !important; padding: 10px !important; cursor: pointer !important; }
-        .pac-item:hover { background-color: rgba(0, 242, 254, 0.1) !important; }
-        .pac-item-query { color: #fff !important; font-weight: 600 !important; }
+        .white-futuristic-bg { background-color: #f8fafc; font-family: 'Inter', system-ui, sans-serif; }
+        .glass-card { background: #ffffff; border: 1px solid rgba(0, 112, 243, 0.1); border-radius: 24px; box-shadow: 0 20px 40px rgba(0, 112, 243, 0.08), 0 1px 3px rgba(0,0,0,0.05); }
+        .cyber-input-light { background: #f1f5f9; border: 1px solid #e2e8f0; color: #1e293b; transition: all 0.3s ease; }
+        .cyber-input-light:focus { border-color: #0070f3; box-shadow: 0 0 0 4px rgba(0, 112, 243, 0.15); outline: none; background: #ffffff; }
+        .btn-gradient { background: linear-gradient(135deg, #0070f3 0%, #00c6ff 100%); color: white; transition: all 0.3s; box-shadow: 0 4px 14px rgba(0, 112, 243, 0.3); }
+        .btn-gradient:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 112, 243, 0.4); }
+        .pac-container { border-radius: 12px !important; box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important; border: 1px solid #e2e8f0 !important; font-family: 'Inter', sans-serif !important; }
+        .pac-item { padding: 12px !important; cursor: pointer !important; font-size: 14px !important; border-top: 1px solid #f1f5f9 !important; }
+        .pac-item:hover { background-color: #f8fafc !important; }
       `}</style>
 
-      <div className="futuristic-bg" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div className="white-futuristic-bg" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
         <Script src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`} onReady={initAutocomplete} />
         
         {(!kode || !isValidCode) ? (
-          <div className="glass-panel" style={{ padding: '40px', borderRadius: '24px', textAlign: 'center', maxWidth: '400px', width: '100%' }}>
-            <div style={{ color: '#ef4444', fontSize: '50px', marginBottom: '15px', textShadow: '0 0 20px rgba(239, 68, 68, 0.5)' }}>✖</div>
-            <h2 style={{ margin: '0 0 10px 0', color: '#fff', fontSize: '24px', fontWeight: '700' }}>Akses Ditolak</h2>
-            <p style={{ margin: '0', color: '#a1a1aa', fontSize: '15px', lineHeight: '1.6' }}>Kode <b>{kode || 'Kosong'}</b> tidak terdaftar di mainframe. Gunakan kartu fisik yang resmi.</p>
+          <div className="glass-card" style={{ padding: '40px', textAlign: 'center', maxWidth: '400px', width: '100%' }}>
+            <RimapLogo />
+            <div style={{ color: '#ef4444', fontSize: '50px', marginBottom: '15px' }}>✖</div>
+            <h2 style={{ margin: '0 0 10px 0', color: '#0f172a', fontSize: '24px', fontWeight: '700' }}>Akses Ditolak</h2>
+            <p style={{ margin: '0', color: '#64748b', fontSize: '15px', lineHeight: '1.6' }}>Kode <b>{kode || 'Kosong'}</b> tidak terdaftar di sistem. Gunakan kartu fisik Rimap yang resmi.</p>
           </div>
         ) : (
-          <div className="glass-panel" style={{ padding: '40px', borderRadius: '24px', maxWidth: '420px', width: '100%' }}>
-            <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-              <h2 className="neon-text" style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: '800', letterSpacing: '-0.5px' }}>INITIATE NFC</h2>
-              <div style={{ display: 'inline-block', background: 'rgba(0, 242, 254, 0.1)', border: '1px solid rgba(0, 242, 254, 0.3)', padding: '6px 16px', borderRadius: '20px', color: '#00f2fe', fontSize: '13px', fontWeight: '600', letterSpacing: '1px' }}>
+          <div className="glass-card" style={{ padding: '40px', maxWidth: '420px', width: '100%' }}>
+            <RimapLogo />
+            <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+              <h2 style={{ margin: '0 0 8px 0', fontSize: '22px', fontWeight: '700', color: '#0f172a' }}>Aktivasi Kartu Baru</h2>
+              <p style={{ margin: '0 0 16px 0', color: '#64748b', fontSize: '14px', lineHeight: '1.5' }}>
+                Selamat datang! Silakan lengkapi data di bawah ini untuk menghubungkan kartu ini dengan halaman ulasan Google bisnis Anda.
+              </p>
+              <div style={{ display: 'inline-block', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '6px 16px', borderRadius: '20px', color: '#0070f3', fontSize: '13px', fontWeight: '600', letterSpacing: '1px' }}>
                 ID: {kode}
               </div>
             </div>
 
             <form onSubmit={handleSimpan}>
               <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#a1a1aa', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Tujuan Bisnis</label>
-                <input ref={inputRef} type="text" placeholder="Ketik lokasi target..." className="cyber-input" style={{ width: '100%', padding: '16px', borderRadius: '12px', fontSize: '15px', boxSizing: 'border-box' }} />
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>1. Cari Nama Bisnis Anda</label>
+                <input ref={inputRef} type="text" placeholder="Ketik lalu pilih dari daftar..." className="cyber-input-light" style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', fontSize: '15px', boxSizing: 'border-box' }} />
               </div>
 
               <div style={{ marginBottom: '32px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#a1a1aa', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Security PIN (4 Digit)</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>2. Buat PIN Keamanan (4 Digit)</label>
+                <p style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#94a3b8' }}>Ingat PIN ini untuk mengubah pengaturan kartu di masa depan.</p>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <input type={showPin ? "text" : "password"} value={pin} onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="••••" required className="cyber-input" style={{ width: '100%', padding: '16px 50px 16px 16px', borderRadius: '12px', fontSize: '18px', boxSizing: 'border-box', letterSpacing: showPin ? 'normal' : '4px' }} />
+                  <input type={showPin ? "text" : "password"} value={pin} onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="••••" required className="cyber-input-light" style={{ width: '100%', padding: '14px 50px 14px 16px', borderRadius: '12px', fontSize: '18px', boxSizing: 'border-box', letterSpacing: showPin ? 'normal' : '4px' }} />
                   <button type="button" onClick={() => setShowPin(!showPin)} style={{ position: 'absolute', right: '16px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {showPin ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
                 </div>
               </div>
 
-              <button type="submit" className="btn-neon" style={{ width: '100%', padding: '16px', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '16px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Aktifkan Sistem
+              <button type="submit" className="btn-gradient" style={{ width: '100%', padding: '16px', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '16px', letterSpacing: '0.5px' }}>
+                Aktifkan Kartu Rimap
               </button>
             </form>
           </div>
@@ -203,7 +173,7 @@ function KartuReviewApp() {
 
 export default function Home() {
   return (
-    <Suspense fallback={<div style={{ backgroundColor: '#050505', minHeight: '100vh' }}></div>}>
+    <Suspense fallback={<div style={{ backgroundColor: '#f8fafc', minHeight: '100vh' }}></div>}>
       <KartuReviewApp />
     </Suspense>
   );
