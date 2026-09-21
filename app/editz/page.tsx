@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Script from 'next/script';
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, updateDoc } from "firebase/firestore";
@@ -25,7 +25,7 @@ const EyeIcon = () => ( <svg width="20" height="20" viewBox="0 0 24 24" fill="no
 const EyeOffIcon = () => ( <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg> );
 
 export default function EditKartuPage() {
-  const [step, setStep] = useState(1); // Step 1: Scan QR, Step 2: Form Edit
+  const [step, setStep] = useState(1);
   const [kode, setKode] = useState('');
   const [manualKode, setManualKode] = useState('');
   const [dbPin, setDbPin] = useState('');
@@ -36,6 +36,25 @@ export default function EditKartuPage() {
   const [scannerActive, setScannerActive] = useState(false);
 
   const inputRef = useRef(null);
+  
+  // Memindahkan inisialisasi Autocomplete ke useEffect terpisah yang memantau step
+  useEffect(() => {
+    if (step === 2 && window.google && inputRef.current) {
+      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+        fields: ['name', 'place_id'],
+        types: ['establishment'],
+      });
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (place.name && place.place_id) {
+          const directReviewUrl = `https://search.google.com/local/writereview?placeid=${place.place_id}`;
+          setSelectedPlace({ name: place.name, url: directReviewUrl });
+        } else {
+          alert('Pilih nama bisnis dari daftar otomatis yang muncul.');
+        }
+      });
+    }
+  }, [step]); // Hanya berjalan ketika user masuk ke step 2
 
   const startScanner = () => {
     if (!window.Html5Qrcode) {
@@ -45,11 +64,10 @@ export default function EditKartuPage() {
     setScannerActive(true);
     const html5QrCode = new window.Html5Qrcode("qr-reader");
     html5QrCode.start(
-      { facingMode: "environment" }, // Pakai kamera belakang
+      { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 250 } },
       (decodedText) => {
         let extractedKode = decodedText;
-        // Jika yang ter-scan adalah URL lengkap, ambil ID uniknya saja
         if (decodedText.includes('?kode=')) {
           const url = new URL(decodedText);
           extractedKode = url.searchParams.get("kode");
@@ -61,7 +79,7 @@ export default function EditKartuPage() {
           });
         }
       },
-      (error) => {} // Abaikan error frame kosong
+      (error) => {}
     ).catch(err => {
       alert("Gagal mengakses kamera. Pastikan browser (Chrome/Safari) diizinkan mengakses kamera.");
       setScannerActive(false);
@@ -79,8 +97,8 @@ export default function EditKartuPage() {
         const data = docSnap.data();
         if (data.google_url && data.pin) {
           setKode(kodeKartu);
-          setDbPin(data.pin); // Simpan PIN asli dari database secara rahasia
-          setStep(2); // Lompat ke halaman 2 (Form Edit)
+          setDbPin(data.pin); 
+          setStep(2); 
         } else {
           alert("Kartu ini belum diaktifkan. Silakan lakukan aktivasi awal terlebih dahulu.");
         }
@@ -93,30 +111,12 @@ export default function EditKartuPage() {
     setLoading(false);
   };
 
-  const initAutocomplete = () => {
-    if (!window.google || !inputRef.current) return;
-    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      fields: ['name', 'place_id'],
-      types: ['establishment'],
-    });
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (place.name && place.place_id) {
-        const directReviewUrl = `https://search.google.com/local/writereview?placeid=${place.place_id}`;
-        setSelectedPlace({ name: place.name, url: directReviewUrl });
-      } else {
-        alert('Pilih nama bisnis dari daftar otomatis yang muncul.');
-      }
-    });
-  };
-
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!selectedPlace) {
       alert('Pilih nama bisnis baru terlebih dahulu!');
       return;
     }
-    // VERIFIKASI PIN
     if (inputPin !== dbPin) {
       alert('PIN yang Anda masukkan SALAH! Akses ditolak.');
       return;
@@ -137,17 +137,13 @@ export default function EditKartuPage() {
   return (
     <div style={{minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif'}}>
       
-      {/* Memuat Sistem QR Scanner dan Google Maps API */}
       <Script src="https://unpkg.com/html5-qrcode" strategy="afterInteractive" />
-      {step === 2 && (
-        <Script src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`} onReady={initAutocomplete} />
-      )}
+      <Script src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`} strategy="afterInteractive" />
 
       <div style={{backgroundColor: '#ffffff', padding: '32px', borderRadius: '24px', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.05)', maxWidth: '400px', width: '100%'}}>
         
-        {/* BAGIAN 1: SCANNER & INPUT MANUAL */}
         {step === 1 && (
-          <>
+          <div style={{display: step === 1 ? 'block' : 'none'}}>
             <h2 style={{ margin: '0 0 12px 0', fontSize: '24px', fontWeight: '700', color: '#111827', textAlign: 'center' }}>Edit Tujuan Kartu</h2>
             <p style={{ margin: '0 0 24px 0', fontSize: '15px', color: '#6b7280', lineHeight: '1.5', textAlign: 'center' }}>Scan stiker QR pada kartu untuk mengubah tautan review Google.</p>
             
@@ -175,12 +171,11 @@ export default function EditKartuPage() {
             <button onClick={() => cekKartu(manualKode)} disabled={loading} style={{width: '100%', padding: '14px', backgroundColor: '#0070f3', color: '#ffffff', border: 'none', borderRadius: '24px', cursor: 'pointer', fontWeight: '600', fontSize: '16px'}}>
               {loading ? 'Memeriksa...' : 'Cari Identitas Kartu'}
             </button>
-          </>
+          </div>
         )}
 
-        {/* BAGIAN 2: FORM PENGUBAHAN TUJUAN */}
         {step === 2 && (
-          <>
+          <div style={{display: step === 2 ? 'block' : 'none'}}>
             <h2 style={{ margin: '0 0 12px 0', fontSize: '24px', fontWeight: '700', color: '#111827' }}>Perbarui Tujuan</h2>
             <p style={{ margin: '0 0 24px 0', fontSize: '15px', color: '#6b7280', lineHeight: '1.5' }}>Kode kartu: <b style={{ color: '#374151' }}>{kode}</b>.</p>
 
@@ -202,7 +197,7 @@ export default function EditKartuPage() {
                 Simpan Perubahan
               </button>
             </form>
-          </>
+          </div>
         )}
 
       </div>
