@@ -3,12 +3,23 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import Script from 'next/script';
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// --- GANTI BAGIAN INI DENGAN KODE DARI FIREBASE LO ---
+const firebaseConfig = {
+  apiKey: "ISI_DENGAN_API_KEY_FIREBASE",
+  authDomain: "ISI_DENGAN_AUTH_DOMAIN",
+  projectId: "ISI_DENGAN_PROJECT_ID",
+  storageBucket: "ISI_DENGAN_STORAGE_BUCKET",
+  messagingSenderId: "ISI_DENGAN_SENDER_ID",
+  appId: "ISI_DENGAN_APP_ID"
+};
+// -----------------------------------------------------
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 // Ikon Mata (Eye Icon) SVG
 const EyeIcon = () => (
@@ -43,15 +54,17 @@ function KartuReviewApp() {
     }
 
     async function cekKartu() {
-      const { data, error } = await supabase
-        .from('kartu_review')
-        .select('*')
-        .eq('kode', kode)
-        .single();
+      try {
+        const docRef = doc(db, "kartu_review", kode);
+        const docSnap = await getDoc(docRef);
 
-      if (data && data.google_url) {
-        window.location.href = data.google_url;
-      } else {
+        if (docSnap.exists() && docSnap.data().google_url) {
+          window.location.href = docSnap.data().google_url;
+        } else {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Error cek kartu:", error);
         setLoading(false);
       }
     }
@@ -62,7 +75,6 @@ function KartuReviewApp() {
   const initAutocomplete = () => {
     if (!window.google || !inputRef.current) return;
     
-    // Mengambil place_id sebagai ganti url biasa
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
       fields: ['name', 'place_id'],
       types: ['establishment'],
@@ -71,7 +83,6 @@ function KartuReviewApp() {
     autocomplete.addListener('place_changed', () => {
       const place = autocomplete.getPlace();
       if (place.name && place.place_id) {
-        // Merakit URL direct review sesuai format generator profesional
         const directReviewUrl = `https://search.google.com/local/writereview?placeid=${place.place_id}`;
         setSelectedPlace({ name: place.name, url: directReviewUrl });
       } else {
@@ -92,20 +103,17 @@ function KartuReviewApp() {
       return;
     }
 
-    const { error } = await supabase
-      .from('kartu_review')
-      .upsert({
+    try {
+      await setDoc(doc(db, "kartu_review", kode), {
         kode: kode,
         nama_bisnis: selectedPlace.name,
         google_url: selectedPlace.url,
         pin: pin
-      }, { onConflict: 'kode' });
-
-    if (error) {
-      alert('Gagal menyimpan: ' + error.message);
-    } else {
+      });
       alert('Kartu berhasil diaktifkan!');
       window.location.href = selectedPlace.url;
+    } catch (error) {
+      alert('Gagal menyimpan: ' + error.message);
     }
   };
 
@@ -145,7 +153,6 @@ function KartuReviewApp() {
         </p>
 
         <form onSubmit={handleSimpan}>
-          {/* Kolom 1: Nama Bisnis */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '8px' }}>
               Nama Bisnis
@@ -166,7 +173,6 @@ function KartuReviewApp() {
             />
           </div>
 
-          {/* Kolom 2: PIN */}
           <div style={{ marginBottom: '28px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '8px' }}>
               Buat PIN (4 Digit Angka)
@@ -209,7 +215,6 @@ function KartuReviewApp() {
             </div>
           </div>
 
-          {/* Tombol Aktifkan */}
           <button 
             type="submit" 
             style={{
