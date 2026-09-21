@@ -20,8 +20,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- 2. GANTI DENGAN URL APPS SCRIPT DARI TAHAP 1 ---
-const GOOGLE_SHEETS_URL = "ISI_DENGAN_URL_APPS_SCRIPT_KAMU";
+// --- 2. GANTI DENGAN URL APPS SCRIPT ---
+const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwwigu7v6Y-WQ3xhhQNtZLfYod4HcYozMpOrTn6wxsqlwcr5Qdu54MTwECz-90vz09g-w/exec";
 
 const RimapLogo = () => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
@@ -54,11 +54,11 @@ function KartuReviewApp() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           if (data.google_url) {
-            window.location.href = data.google_url; // Sudah terdaftar
+            window.location.href = data.google_url; 
           } else if (data.status === "lolos_qc") {
-            setUiState('register'); // Lolos QC, siap diisi
+            setUiState('register'); 
           } else {
-            setUiState('qc'); // Paksa masuk QC jika status belum lolos_qc
+            setUiState('qc'); 
           }
         } else { setUiState('invalid'); }
       } catch (error) { setUiState('invalid'); }
@@ -86,11 +86,11 @@ function KartuReviewApp() {
     try {
       await updateDoc(doc(db, "kartu_review", kode), { status: "lolos_qc" });
       
-      // Update Sheets (Gunakan no-cors agar tidak diblokir browser)
+      // Update Sheets dengan text/plain agar lolos sensor CORS
       fetch(GOOGLE_SHEETS_URL, {
         method: 'POST',
         mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'updateStatus', kode: kode, status: 'Lolos QC' })
       }).catch(err => console.log("Background sync error:", err));
 
@@ -111,11 +111,11 @@ function KartuReviewApp() {
         status: "terpakai"
       });
       
-      // Update Sheets
+      // Update Sheets dengan text/plain
       fetch(GOOGLE_SHEETS_URL, {
         method: 'POST',
         mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'updateStatus', kode: kode, status: 'Terpakai (Fill Hijau)' })
       }).catch(err => console.log("Background sync error:", err));
       
